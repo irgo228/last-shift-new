@@ -1,6 +1,8 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
+import ZoomableDiagram from '../components/ZoomableDiagram';
+import {leaderboardSlots} from '../../lib/leaderboard-slots.mjs';
 
 const STORAGE_KEY='lastshift-mini-host-room';
 async function jsonFetch(url,options){const r=await fetch(url,{cache:'no-store',...options});const data=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(data.error||'Не удалось связаться с сервером'),{status:r.status});return data;}
@@ -18,16 +20,24 @@ function Stage({state}){
  const {phase,question,serverNow}=state;
  if(phase.kind==='question')return <section className="stage" aria-live="polite">
   <div className="stage-heading"><span className="stage-label">ВОПРОС {phase.questionNo} / 3</span><Countdown phase={phase} serverNow={serverNow}/></div>
-  <h2>{question.text}</h2><img className="stage-image" src={question.image} alt={'Технологическая схема к вопросу '+phase.questionNo}/>
+  <h2>{question.text}</h2><ZoomableDiagram src={question.image} alt={'Технологическая схема к вопросу '+phase.questionNo}/>
   <div className="host-options">{question.choices.map(c=><div key={c.id}><b>{c.id}</b> {c.text}</div>)}</div>
   <p className="stage-progress">Ответили: {state.submittedCount} из {state.room.participantCount}</p>
  </section>;
- if(phase.kind==='reveal')return <section className="stage" aria-live="polite"><div className="stage-heading"><span className="stage-label">РАЗБОР ВОПРОСА {phase.questionNo}</span><Countdown phase={phase} serverNow={serverNow}/></div><img className="stage-image" src={question.answerImage} alt={'Изображение с правильным ответом на вопрос '+phase.questionNo}/><div className="answer-label">Правильный ответ: {question.correct}</div></section>;
+ if(phase.kind==='reveal')return <section className="stage" aria-live="polite"><div className="stage-heading"><span className="stage-label">РАЗБОР ВОПРОСА {phase.questionNo}</span><Countdown phase={phase} serverNow={serverNow}/></div><ZoomableDiagram src={question.answerImage} alt={'Изображение с правильным ответом на вопрос '+phase.questionNo}/><div className="answer-label">Правильный ответ: {question.correct}</div></section>;
  const winner=state.winner;
- if(phase.kind==='final')return <section className="victory" aria-live="polite">
-  <div className="victory-winner"><div className="winner-name">{winner?.name||'Нет участников'}</div></div><div className="victory-score">{winner?`${winner.score} / 3`:''}</div>
-  <ol className="victory-ranking">{(state.leaderboard||[]).map(p=><li key={p.id} className={'rank-'+p.rank}><span className="ranking-number">{p.rank}</span><span className="ranking-name">{p.name}</span><span className="ranking-score">{p.score}</span></li>)}</ol>
- </section>;
+ const ranking=state.leaderboard||[];
+ const slots=leaderboardSlots(ranking);
+ if(phase.kind==='final')return <><section className="victory" aria-label="Результаты викторины" aria-live="polite">
+  <div className="victory-winner"><div className="winner-name" data-length={winner?.name?.length>24?'long':winner?.name?.length>16?'medium':'short'}>{winner?.name||'Нет участников'}</div></div>
+  <div className="victory-score">{winner?`${winner.score} / 3`:''}</div>
+  <ol className="victory-ranking" aria-label="Десять лучших участников">{slots.map((player,i)=><li key={player?.id||'empty-'+i} className={player?'rank-'+(i+1):'rank-empty'} aria-label={player?`${i+1} место: ${player.name}, ${player.score} баллов`:undefined} aria-hidden={!player}>
+    {player&&<><span className="ranking-name" title={player.name}>{player.name}</span><span className="ranking-score">{player.score}</span></>}
+  </li>)}</ol>
+ </section>
+  <div className="victory-mobile-summary"><h2>Победитель</h2><p className="mobile-winner">{winner?.name||'Нет участников'} — {winner?.score??0} / 3</p>
+  <h2>ТОП-10</h2><ol>{ranking.slice(0,10).map(p=><li key={'mobile-'+p.id}><div className="mobile-rank-row"><span>{p.name}</span><span>{p.score} / 3</span></div></li>)}</ol></div>
+ </>;
  return null;
 }
 export default function HostPage(){
@@ -51,11 +61,14 @@ export default function HostPage(){
  const phase=room?.phase?.kind||'lobby';
  return <main className="host-room">
   <div className="host-toolbar"><Link href="/" className="brand-mini">ПОСЛЕДНЯЯ <b>СМЕНА</b></Link><span className="room-pill">Комната {code}</span><span className={'connection-status '+(online?'good':'bad')}>{online?'● На связи':'● Восстанавливаем связь…'}</span></div>
-  {phase==='lobby' ? <><div className="hero-lobby"><div className="hero-qr">
+  {phase==='lobby' ? <><div className="lobby-board" aria-label="Последняя смена — вход в комнату">
+    <div className="lobby-qr">{qr?<img src={qr} alt={'QR-код для входа в комнату '+code}/>:<span>Создаём QR…</span>}<span className="lobby-code">{code}</span></div>
+    <button className="lobby-start" onClick={start} disabled={busy||!room?.room?.participantCount}>{busy?'Запускаем…':'Начать игру'}</button>
+  </div><div className="lobby-mobile-controls">
     {qr?<img src={qr} alt={'QR-код для входа в комнату '+code}/>:<span>Создаём QR…</span>}
-    <span className="qr-code">{code}</span>
+    <span className="lobby-code">{code}</span>
     <button className="gold-button" onClick={start} disabled={busy||!room?.room?.participantCount}>{busy?'Запускаем…':'Начать игру'}</button>
-  </div></div><div className="participants"><div><h2>Участники: {room?.room?.participantCount??'…'}/15</h2><p>Покажите QR-код на большом экране. Игроки появятся здесь после входа.</p></div><div className="name-chips">{(room?.participants||[]).map(p=><span key={p.id}>{p.display_name}</span>)}</div></div></> : <Stage state={room}/>}
+  </div><div className="participants"><div><h2>Участники: {room?.room?.participantCount??'…'}/15</h2><p>Покажите QR-код на большом экране. Игроки появятся здесь после входа.</p></div><div className="name-chips">{(room?.participants||[]).map(p=><span key={p.id}>{p.display_name}</span>)}</div></div></> : <Stage state={room}/>}
   {error&&<div className="small-error" role="alert">{error}</div>}
   {phase==='final'&&<div className="below-stage"><p>Результаты сохранены в Supabase. Для следующей группы создайте новую комнату.</p><button className="ghost-button" onClick={()=>{setCode(null);setRoom(null);sessionStorage.removeItem(STORAGE_KEY)}}>Новая комната</button></div>}
  </main>;

@@ -2,6 +2,7 @@
 import {useParams} from 'next/navigation';
 import {useEffect,useRef,useState,useCallback} from 'react';
 import Link from 'next/link';
+import ZoomableDiagram from '../../components/ZoomableDiagram';
 const OPTIONS=['А','Б','В','Г'];
 async function call(url,token,options={}){const res=await fetch(url,{cache:'no-store',...options,headers:{...(token?{Authorization:'Bearer '+token}:{}),...(options.headers||{})}});const json=await res.json().catch(()=>({}));if(!res.ok)throw Object.assign(new Error(json.error||'Ошибка соединения'),{status:res.status});return json;}
 function Timer({phase,serverNow}){
@@ -13,7 +14,7 @@ function Timer({phase,serverNow}){
 }
 export default function PlayerPage(){
  const {code}=useParams();const valid=typeof code==='string'&&/^\d{4}$/.test(code);
- const [token,setToken]=useState(null),[name,setName]=useState(''),[state,setState]=useState(null),[waiting,setWaiting]=useState(true),[joining,setJoining]=useState(false),[sending,setSending]=useState(false),[error,setError]=useState(''),[online,setOnline]=useState(true),[zoom,setZoom]=useState(false);
+ const [token,setToken]=useState(null),[name,setName]=useState(''),[state,setState]=useState(null),[waiting,setWaiting]=useState(true),[joining,setJoining]=useState(false),[sending,setSending]=useState(false),[error,setError]=useState(''),[online,setOnline]=useState(true);
  const stateRef=useRef(null),busyRef=useRef(false),acceptedRef=useRef(null);
  useEffect(()=>{if(!valid)return;try{const old=localStorage.getItem('ls-mini:'+code);if(old&&/^[0-9a-f]{64}$/.test(old))setToken(old);}catch{}setWaiting(false);},[code,valid]);
  const refresh=useCallback(async()=>{
@@ -44,10 +45,10 @@ export default function PlayerPage(){
  return <main className="player-app"><header className="player-header"><span className="brand-mini">ПОСЛЕДНЯЯ <b>СМЕНА</b></span><span className="room-pill">{code}</span></header>
   {!online&&<div className="connection-alert" role="status">Восстанавливаем связь. Принятые ответы сохранены на сервере.</div>}
   {phase.kind==='lobby'&&<section className="player-card waiting-card"><p className="eyebrow">ВЫ В ИГРЕ</p><h1>{me?.name||name}</h1><p>Ожидайте, когда ведущий начнёт викторину.</p><p className="player-counter">Участников: {state.room.participantCount}/15</p><img src="/assets/title.jpg" alt="Последняя смена" className="lobby-preview"/></section>}
-  {phase.kind==='question'&&<section className="player-card"><div className="stage-heading"><span className="stage-label">ВОПРОС {phase.questionNo} / 3</span><Timer phase={phase} serverNow={serverNow}/></div><h1>{question.text}</h1><button className="image-tap" onClick={()=>setZoom(true)} aria-label="Увеличить технологическую схему"><img src={question.image} alt="Технологическая схема"/><span>Нажмите, чтобы увеличить схему</span></button><div className="answer-options">{question.choices.map((choice,i)=><button key={choice.id} type="button" className={'option '+(me?.answer===choice.id?'selected':'')} disabled={answered||sending} onClick={()=>answer(choice.id)}><span className="option-id">{OPTIONS[i]}</span><span>{choice.text}</span></button>)}</div>{answered&&<p className="accepted" role="status">✓ Ваш ответ {me.answer} принят. Ждём остальных участников.</p>}{sending&&<p role="status">Отправляем ответ…</p>}</section>}
-  {phase.kind==='reveal'&&<section className="player-card"><div className="stage-heading"><span className="stage-label">ПРАВИЛЬНЫЙ ОТВЕТ {phase.questionNo} / 3</span><Timer phase={phase} serverNow={serverNow}/></div><img className="answer-illustration" src={question.answerImage} alt="Объяснение правильного ответа"/><h2>Правильный вариант: {question.correct}</h2></section>}
+  {phase.kind==='question'&&<section className="player-card"><div className="stage-heading"><span className="stage-label">ВОПРОС {phase.questionNo} / 3</span><Timer phase={phase} serverNow={serverNow}/></div><h1>{question.text}</h1><ZoomableDiagram src={question.image} alt="Технологическая схема" mode="player"/><div className="answer-options">{question.choices.map((choice,i)=><button key={choice.id} type="button" className={'option '+(me?.answer===choice.id?'selected':'')} disabled={answered||sending} onClick={()=>answer(choice.id)}><span className="option-id">{OPTIONS[i]}</span><span>{choice.text}</span></button>)}</div>{answered&&<p className="accepted" role="status">✓ Ваш ответ {me.answer} принят. Ждём остальных участников.</p>}{sending&&<p role="status">Отправляем ответ…</p>}</section>}
+  {phase.kind==='reveal'&&<section className="player-card"><div className="stage-heading"><span className="stage-label">ПРАВИЛЬНЫЙ ОТВЕТ {phase.questionNo} / 3</span><Timer phase={phase} serverNow={serverNow}/></div><ZoomableDiagram src={question.answerImage} alt="Объяснение правильного ответа" mode="player"/><h2>Правильный вариант: {question.correct}</h2></section>}
   {phase.kind==='final'&&<section className="player-card final-player"><p className="eyebrow">ИГРА ОКОНЧЕНА</p><h1>{me.name}, спасибо за участие!</h1><p>Ваш результат:</p><strong className="final-number">{state.myResult?.score??0} / 3</strong><p className="your-rank">Место: {state.myResult?.rank||'—'}</p><h2>Победитель — {state.winner?.name||'—'}</h2></section>}
   {error&&<p className="error" role="alert">{error}</p>}
-  {zoom&&phase.kind==='question'&&<div className="zoom-backdrop" role="dialog" aria-modal="true" aria-label="Увеличенная технологическая схема" onClick={()=>setZoom(false)}><button className="zoom-close" onClick={()=>setZoom(false)} aria-label="Закрыть">✕ Закрыть</button><img src={question.image} alt="Увеличенная технологическая схема" onClick={e=>e.stopPropagation()}/></div>}
+
  </main>;
 }
